@@ -15,7 +15,7 @@ DATA_PATH = None
 OUTPUT_PATH = None
 
 if DATA_PATH is None:
-    DATA_PATH = osp.join(PROJECT_PATH, 'data')
+    DATA_PATH = osp.join(PROJECT_PATH, "data")
 
 if OUTPUT_PATH is None:
-    OUTPUT_PATH = osp.join(PROJECT_PATH, 'output')
+    OUTPUT_PATH = osp.join(PROJECT_PATH, "output")

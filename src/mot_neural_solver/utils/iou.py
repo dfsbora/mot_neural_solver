@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def iou(boxA, boxB):
     """
     Args:
@@ -28,6 +29,7 @@ def iou(boxA, boxB):
     iou = interArea / (boxAArea + np.transpose(boxBArea) - interArea)
 
     return iou
+
 
 def iou_pairs(boxA, boxB):
     """

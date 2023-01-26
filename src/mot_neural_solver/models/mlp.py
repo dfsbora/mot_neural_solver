@@ -5,8 +5,9 @@ class MLP(nn.Module):
     def __init__(self, input_dim, fc_dims, dropout_p=0.4, use_batchnorm=False):
         super(MLP, self).__init__()
 
-        assert isinstance(fc_dims, (list, tuple)), 'fc_dims must be either a list or a tuple, but got {}'.format(
-            type(fc_dims))
+        assert isinstance(
+            fc_dims, (list, tuple)
+        ), "fc_dims must be either a list or a tuple, but got {}".format(type(fc_dims))
 
         layers = []
         for dim in fc_dims:
@@ -26,5 +27,3 @@ class MLP(nn.Module):
 
     def forward(self, input):
         return self.fc_layers(input)
-
-

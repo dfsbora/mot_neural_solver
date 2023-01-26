@@ -22,7 +22,7 @@ from mot_neural_solver.path_cfg import OUTPUT_PATH, DATA_PATH
 from sacred import Experiment
 
 ex = Experiment()
-ex.add_config('configs/mot20/obj_detect_cfg.yaml')
+ex.add_config("configs/mot20/obj_detect_cfg.yaml")
 
 
 def get_detection_model(num_classes):
@@ -36,6 +36,7 @@ def get_detection_model(num_classes):
     model.roi_heads.nms_thresh = 0.3
 
     return model
+
 
 def get_transform(train):
     transforms = []
@@ -54,33 +55,49 @@ def main(_config):
     torch.manual_seed(1)
 
     # use our dataset and defined transformations
-    dataset_path = osp.join(DATA_PATH, _config['dataset_dir'])
+    dataset_path = osp.join(DATA_PATH, _config["dataset_dir"])
     dataset = MOT17ObjDetect(dataset_path, get_transform(train=True))
     data_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=_config['train_params']['batch_size'], shuffle=True, num_workers=4,
-        collate_fn=utils.collate_fn)
+        dataset,
+        batch_size=_config["train_params"]["batch_size"],
+        shuffle=True,
+        num_workers=4,
+        collate_fn=utils.collate_fn,
+    )
 
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # get the model using our helper function
     model = get_detection_model(dataset.num_classes)
     model.to(device)
 
-    model_state_dict = torch.load(osp.join(OUTPUT_PATH, _config['train_params']['start_ckpt']))
+    model_state_dict = torch.load(
+        osp.join(OUTPUT_PATH, _config["train_params"]["start_ckpt"])
+    )
     model.load_state_dict(model_state_dict)
 
     # construct an optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, **_config['optimizer_params'])
+    optimizer = torch.optim.SGD(params, **_config["optimizer_params"])
 
+    os.makedirs(osp.join(OUTPUT_PATH, "trained_models/frcnn"), exist_ok=True)
 
-    os.makedirs(osp.join(OUTPUT_PATH, 'trained_models/frcnn'),  exist_ok=True)
-
-    for epoch in range(1, _config['train_params']['num_epochs']+ 1):
+    for epoch in range(1, _config["train_params"]["num_epochs"] + 1):
         train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
-        if not _config['train_params']['save_only_last_ckpt']:
-            torch.save(model.state_dict(), osp.join(OUTPUT_PATH, 'trained_models/frcnn/mot20', f"mot20_frcnn_epoch_{epoch}.pt.tar"))
+        if not _config["train_params"]["save_only_last_ckpt"]:
+            torch.save(
+                model.state_dict(),
+                osp.join(
+                    OUTPUT_PATH,
+                    "trained_models/frcnn/mot20",
+                    f"mot20_frcnn_epoch_{epoch}.pt.tar",
+                ),
+            )
 
-    if _config['train_params']['save_only_last_ckpt']:
-        torch.save(model.state_dict(), osp.join(OUTPUT_PATH, 'trained_models/frcnn', f"mot20_frcnn_epoch_{epoch}.pt.tar"))
-
+    if _config["train_params"]["save_only_last_ckpt"]:
+        torch.save(
+            model.state_dict(),
+            osp.join(
+                OUTPUT_PATH, "trained_models/frcnn", f"mot20_frcnn_epoch_{epoch}.pt.tar"
+            ),
+        )

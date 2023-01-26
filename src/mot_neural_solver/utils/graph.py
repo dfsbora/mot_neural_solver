@@ -4,7 +4,9 @@ import torch
 from torch_scatter import scatter_mean
 
 
-def get_time_valid_conn_ixs(frame_num, max_frame_dist, return_undirected = True, use_cuda = False):
+def get_time_valid_conn_ixs(
+    frame_num, max_frame_dist, return_undirected=True, use_cuda=False
+):
     """
     Determines the valid connections among nodes (detections) according to their time distance. Valid connections
     are those for which nodes are not in the same frame, and their time dist is not greater than max_frame_dist.
@@ -19,24 +21,30 @@ def get_time_valid_conn_ixs(frame_num, max_frame_dist, return_undirected = True,
         torch.Tensor with shape (2, num_edges) corresponding to the valid edges
 
     """
-    assert isinstance(max_frame_dist, (int, np.uint)) or max_frame_dist == 'max'
+    assert isinstance(max_frame_dist, (int, np.uint)) or max_frame_dist == "max"
 
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     frame_num = frame_num.to(device)
-    assert (torch.sort(frame_num)[0] == frame_num).all(), "Detections are NOT sorted by timestamp. Graph was not created properly!"
+    assert (
+        torch.sort(frame_num)[0] == frame_num
+    ).all(), "Detections are NOT sorted by timestamp. Graph was not created properly!"
 
     changepoints = torch.where(frame_num[1:] != frame_num[:-1])[0] + 1
-    changepoints = torch.cat((changepoints, torch.as_tensor([frame_num.shape[0]]).to(changepoints.device)))
+    changepoints = torch.cat(
+        (changepoints, torch.as_tensor([frame_num.shape[0]]).to(changepoints.device))
+    )
     all_det_ixs = torch.arange(frame_num.shape[0], device=frame_num.device)
 
     edge_ixs = []
     for start_frame_ix, end_frame_ix in zip(changepoints[:-1], changepoints[1:]):
-        curr_frame_ixs = all_det_ixs[start_frame_ix: end_frame_ix]
+        curr_frame_ixs = all_det_ixs[start_frame_ix:end_frame_ix]
         curr_frame_num = frame_num[curr_frame_ixs[0]]
 
         # Update past frames
-        if max_frame_dist != 'max':
-            past_frames_ixs = torch.where(torch.abs(frame_num[:start_frame_ix] - curr_frame_num) <= max_frame_dist)[0]
+        if max_frame_dist != "max":
+            past_frames_ixs = torch.where(
+                torch.abs(frame_num[:start_frame_ix] - curr_frame_num) <= max_frame_dist
+            )[0]
 
         else:
             past_frames_ixs = all_det_ixs[:start_frame_ix]
@@ -52,8 +60,9 @@ def get_time_valid_conn_ixs(frame_num, max_frame_dist, return_undirected = True,
         return torch.cat((edge_ixs, torch.stack((edge_ixs[1], edge_ixs[0]))), dim=1)
 
 
-
-def get_time_valid_conn_ixs_old(frame_num, max_frame_dist, use_cuda, return_undirected = True):
+def get_time_valid_conn_ixs_old(
+    frame_num, max_frame_dist, use_cuda, return_undirected=True
+):
     """
     Determines the valid connections among nodes (detections) according to their time distance. Valid connections
     are those for which nodes are not in the same frame, and their time dist is not greater than max_frame_dist.
@@ -67,14 +76,14 @@ def get_time_valid_conn_ixs_old(frame_num, max_frame_dist, use_cuda, return_undi
         torch.Tensor with shape (2, num_edges) corresponding to the valid edges
 
     """
-    assert isinstance(max_frame_dist, (int, np.uint)) or max_frame_dist == 'max'
+    assert isinstance(max_frame_dist, (int, np.uint)) or max_frame_dist == "max"
 
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     frame_num = frame_num.to(device)
     frames_time_dists = torch.abs(frame_num.reshape(-1, 1) - frame_num.reshape(1, -1))
     frame_dist_cond = frames_time_dists > 0
 
-    if max_frame_dist != 'max':
+    if max_frame_dist != "max":
         frame_dist_cond = frame_dist_cond & (frames_time_dists <= max_frame_dist)
 
     row, col = torch.where(frame_dist_cond)
@@ -87,7 +96,15 @@ def get_time_valid_conn_ixs_old(frame_num, max_frame_dist, use_cuda, return_undi
     return torch.stack((row, col)).cpu()
 
 
-def get_knn_mask(pwise_dist, edge_ixs, num_nodes, top_k_nns, use_cuda, reciprocal_k_nns=False, symmetric_edges = True ):
+def get_knn_mask(
+    pwise_dist,
+    edge_ixs,
+    num_nodes,
+    top_k_nns,
+    use_cuda,
+    reciprocal_k_nns=False,
+    symmetric_edges=True,
+):
     """
     Determines the edge indices corresponding to the KNN graph according to pruning_out
     Args:
@@ -109,7 +126,9 @@ def get_knn_mask(pwise_dist, edge_ixs, num_nodes, top_k_nns, use_cuda, reciproca
     if not symmetric_edges:
         dist_mat[edge_ixs[1], edge_ixs[0]] = pwise_dist.to(device).view(-1)
 
-    row, col = torch.from_numpy(np.indices((num_nodes, num_nodes))).to(device) # In both cases we need these indices
+    row, col = torch.from_numpy(np.indices((num_nodes, num_nodes))).to(
+        device
+    )  # In both cases we need these indices
 
     # For each node, order its Neighboring nodes and select the top K
     per_node_order = torch.argsort(dist_mat, dim=1, descending=False)
@@ -125,10 +144,10 @@ def get_knn_mask(pwise_dist, edge_ixs, num_nodes, top_k_nns, use_cuda, reciproca
         in_k_nns = in_k_nns & in_k_nns.T
 
     else:
-        in_k_nns =  in_k_nns | in_k_nns.T
+        in_k_nns = in_k_nns | in_k_nns.T
 
     # Make sure that the edges we use were in the original set (i.e not set to inf)
-    is_feasible = dist_mat != -float('inf')
+    is_feasible = dist_mat != -float("inf")
     knns_conds = in_k_nns & is_feasible
 
     # Now, Gather the final mask
@@ -153,28 +172,28 @@ def compute_edge_feats_dict(edge_ixs, det_df, fps, use_cuda):
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     row, col = edge_ixs
 
-    secs_time_dists = torch.from_numpy(det_df['frame'].values).float().to(device) / fps
+    secs_time_dists = torch.from_numpy(det_df["frame"].values).float().to(device) / fps
 
-    bb_height = torch.from_numpy(det_df['bb_height'].values).float().to(device)
-    bb_width = torch.from_numpy(det_df['bb_width'].values).float().to(device)
+    bb_height = torch.from_numpy(det_df["bb_height"].values).float().to(device)
+    bb_width = torch.from_numpy(det_df["bb_width"].values).float().to(device)
 
-    feet_x = torch.from_numpy(det_df['feet_x'].values).float().to(device)
-    feet_y = torch.from_numpy(det_df['feet_y'].values).float().to(device)
+    feet_x = torch.from_numpy(det_df["feet_x"].values).float().to(device)
+    feet_y = torch.from_numpy(det_df["feet_y"].values).float().to(device)
 
     mean_bb_heights = (bb_height[row] + bb_height[col]) / 2
 
-    edge_feats_dict = {'secs_time_dists': secs_time_dists[col] - secs_time_dists[row],
-
-                       'norm_feet_x_dists': (feet_x[col] - feet_x[row]) / mean_bb_heights,
-                       'norm_feet_y_dists': (feet_y[col] - feet_y[row]) / mean_bb_heights,
-
-                       'bb_height_dists': torch.log(bb_height[col] / bb_height[row]),
-                       'bb_width_dists': torch.log(bb_width[col] / bb_width[row])}
+    edge_feats_dict = {
+        "secs_time_dists": secs_time_dists[col] - secs_time_dists[row],
+        "norm_feet_x_dists": (feet_x[col] - feet_x[row]) / mean_bb_heights,
+        "norm_feet_y_dists": (feet_y[col] - feet_y[row]) / mean_bb_heights,
+        "bb_height_dists": torch.log(bb_height[col] / bb_height[row]),
+        "bb_width_dists": torch.log(bb_width[col] / bb_width[row]),
+    }
 
     return edge_feats_dict
 
 
-def to_undirected_graph(mot_graph, attrs_to_update = ('edge_preds', 'edge_labels')):
+def to_undirected_graph(mot_graph, attrs_to_update=("edge_preds", "edge_labels")):
     """
     Given a MOTGraph object, it updates its Graph object to make its edges directed (instead of having each edge
     (i, j) appear twice (e.g. (i, j) and (j, i)) it only keeps (i, j) with i <j)
@@ -187,17 +206,26 @@ def to_undirected_graph(mot_graph, attrs_to_update = ('edge_preds', 'edge_labels
 
     # Make edges undirected
     sorted_edges, _ = torch.sort(mot_graph.graph_obj.edge_index, dim=0)
-    undirected_edges, orig_indices = torch.unique(sorted_edges, return_inverse=True, dim=1)
-    assert sorted_edges.shape[1] == 2 * undirected_edges.shape[1], "Some edges were not duplicated"
+    undirected_edges, orig_indices = torch.unique(
+        sorted_edges, return_inverse=True, dim=1
+    )
+    assert (
+        sorted_edges.shape[1] == 2 * undirected_edges.shape[1]
+    ), "Some edges were not duplicated"
     mot_graph.graph_obj.edge_index = undirected_edges
 
     # Average values between each pair of directed edges for all attributes in 'attrs_to_update'
     for attr_name in attrs_to_update:
         if hasattr(mot_graph.graph_obj, attr_name):
-            undirected_attr = scatter_mean(getattr(mot_graph.graph_obj, attr_name), orig_indices)
+            undirected_attr = scatter_mean(
+                getattr(mot_graph.graph_obj, attr_name), orig_indices
+            )
             setattr(mot_graph.graph_obj, attr_name, undirected_attr)
 
-def to_lightweight_graph(mot_graph, attrs_to_del=('reid_emb_dists', 'x', 'edge_attr', 'edge_labels')):
+
+def to_lightweight_graph(
+    mot_graph, attrs_to_del=("reid_emb_dists", "x", "edge_attr", "edge_labels")
+):
     """
     Deletes attributes in mot_graph that are not needed for inference, to save memory
     Args:
@@ -206,7 +234,9 @@ def to_lightweight_graph(mot_graph, attrs_to_del=('reid_emb_dists', 'x', 'edge_a
 
     """
     mot_graph.graph_obj.num_nodes = mot_graph.graph_obj.num_nodes
-    mot_graph.graph_obj.node_names = torch.arange(mot_graph.graph_obj.num_nodes).to(mot_graph.graph_obj.device())
+    mot_graph.graph_obj.node_names = torch.arange(mot_graph.graph_obj.num_nodes).to(
+        mot_graph.graph_obj.device()
+    )
 
     # Delete attributes that are unnecessary for inference
     for attr_name in attrs_to_del:
